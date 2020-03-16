@@ -1,0 +1,423 @@
+﻿//=============================================================================
+// Siemens AG
+// (c)Copyright (2016) All Rights Reserved
+//----------------------------------------------------------------------------- 
+// Tested with: Windows 7 Ultimate x64
+// Engineering: Visual Studio 2013
+// Functionality: Simple OPC UA Client
+//-----------------------------------------------------------------------------
+// Change log table:
+// Version Date Expert in charge Changes applied
+// 01.00.00 31.08.2016 (Siemens) First released version
+//=============================================================================
+ 
+ 
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.IdentityModel;
+using System.Linq;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using Opc.Ua;
+using Opc.Ua.Client;
+using Siemens.UAClientHelper;
+ 
+namespace UA_Client_1500
+{
+    public partial class UAClientForm : Form
+    {
+        /// <summary>
+        /// Fields
+        /// </summary>
+        #region Fields
+        private Session mySession;
+        private Subscription mySubscription;      
+        private UAClientHelperAPI myClientHelperAPI;
+        private EndpointDescription mySelectedEndpoint;
+        private MonitoredItem myMonitoredItem;
+        private Boolean mySecurity;
+        private List<String> myRegisteredNodeIdStrings;
+        #endregion
+ 
+        /// <summary>
+        /// Form Construction
+        /// </summary>
+        #region Construction
+        public UAClientForm()
+        {
+            InitializeComponent();
+            myClientHelperAPI = new UAClientHelperAPI();
+            myRegisteredNodeIdStrings = new List<String>();
+            browsePage.Enabled = false;
+            rwPage.Enabled = false;
+            subscribePage.Enabled = false;
+        }
+        #endregion
+ 
+        /// <summary>
+        /// Methods called by the UI
+        /// </summary>
+        #region UserInteractions
+        private void EndpointButton_Click(object sender, EventArgs e)
+        {
+            endpointListView.Items.Clear();
+            //The local discovery URL for the discovery server
+            string discoveryUrl = discoveryTextBox.Text;
+            try
+            {
+                ApplicationDescriptionCollection servers = myClientHelperAPI.FindServers(discoveryUrl);
+                foreach (ApplicationDescription ad in servers)
+                {
+                    foreach (string url in ad.DiscoveryUrls)
+                    {
+                        EndpointDescriptionCollection endpoints = myClientHelperAPI.GetEndpoints(url);
+                        foreach (EndpointDescription ep in endpoints)
+                        {
+                            string securityPolicy = ep.SecurityPolicyUri.Remove(0, 42);
+                            endpointListView.Items.Add("["   ad.ApplicationName   "] "   " ["   ep.SecurityMode   "] "   " ["   securityPolicy   "] "   " ["   ep.EndpointUrl   "]").Tag = ep;
+                        }
+                    }
+                } 
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error");
+            }           
+        }
+        private void SubscribeButton_Click(object sender, EventArgs e)
+        {
+            if (myMonitoredItem != null)
+            {
+                try
+                {
+                    myMonitoredItem = myClientHelperAPI.RemoveMonitoredItem(mySubscription, myMonitoredItem);
+                }
+                catch
+                {
+                    ;
+                }
+            }                
+ 
+            try
+            {
+                mySubscription = myClientHelperAPI.Subscribe(1000);
+                myMonitoredItem = myClientHelperAPI.AddMonitoredItem(mySubscription, subscriptionIdTextBox.Text, 1);
+                myClientHelperAPI.ItemChangedNotification  = new MonitoredItemNotificationEventHandler(Notification_MonitoredItem);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error");
+            }
+        }
+        private void ConnectServerButton_Click(object sender, EventArgs e)
+        {
+            if (mySession != null && !mySession.Disposed)
+            {                
+                myClientHelperAPI.Disconnect();
+                mySession = myClientHelperAPI.Session;
+                connectServerBtn.Text = "Connect to server";
+                epConnectButton.Text = "Connect to server";
+ 
+                browsePage.Enabled = false;
+                rwPage.Enabled = false;
+                subscribePage.Enabled = false;
+            }
+            else
+            {
+                try
+                {
+                    myClientHelperAPI.Connect(ServerUriTextbox.Text, mySecurity);
+                    mySession = myClientHelperAPI.Session;
+                   
+                    myClientHelperAPI.KeepAliveNotification  = new KeepAliveEventHandler(Notification_KeepAlive);
+ 
+                    browsePage.Enabled = true;
+                    rwPage.Enabled = true;
+                    subscribePage.Enabled = true;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message, "Error");
+                }
+                 
+            }
+        }
+        private void EpConnectButton_Click(object sender, EventArgs e)
+        {
+            if (mySession != null && !mySession.Disposed)
+            {
+                myClientHelperAPI.Disconnect();
+                mySession = myClientHelperAPI.Session;
+                connectServerBtn.Text = "Connect to server";
+                epConnectButton.Text = "Connect to server";
+ 
+                browsePage.Enabled = false;
+                rwPage.Enabled = false;
+                subscribePage.Enabled = false;
+            }
+            else
+            {
+                try
+                {
+                    myClientHelperAPI.Connect(mySelectedEndpoint);
+                    mySession = myClientHelperAPI.Session;
+                    connectServerBtn.Text = "Disconnect from server";
+                    epConnectButton.Text = "Disconnect from server";
+                    myClientHelperAPI.KeepAliveNotification  = new KeepAliveEventHandler(Notification_KeepAlive);
+ 
+                    browsePage.Enabled = true;
+                    rwPage.Enabled = true;
+                    subscribePage.Enabled = true;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message, "Error");
+                }
+            }
+ 
+        }
+        private void WriteValButton_Click(object sender, EventArgs e)
+        {
+            List<String> values = new List<string>();
+            List<String> nodeIdStrings = new List<string>();
+            values.Add(writeTextBox.Text);
+            nodeIdStrings.Add(writeIdTextBox.Text);
+            try
+            {
+                myClientHelperAPI.WriteValues(values, nodeIdStrings);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error");
+            }
+        }
+        private void UnsubscribeButton_Click(object sender, EventArgs e)
+        {
+            myClientHelperAPI.RemoveSubscription(mySubscription);
+            subscriptionLabel.Text = "";
+        }
+        private void NodeTreeView_BeforeSelect(object sender, TreeViewCancelEventArgs e)
+        {
+            descriptionGridView.Rows.Clear();
+            ReferenceDescription refDesc = (ReferenceDescription)e.Node.Tag;
+            Node node = myClientHelperAPI.ReadNode(refDesc.NodeId.ToString());
+            VariableNode variableNode = new VariableNode();
+             
+            string[] row1 = new string[] { "Node Id", refDesc.NodeId.ToString() };
+            string[] row2 = new string[] { "Namespace Index", refDesc.NodeId.NamespaceIndex.ToString() };
+            string[] row3 = new string[] { "Identifier Type", refDesc.NodeId.IdType.ToString() };
+            string[] row4 = new string[] { "Identifier", refDesc.NodeId.Identifier.ToString() };
+            string[] row5 = new string[] { "Browse Name", refDesc.BrowseName.ToString() };
+            string[] row6 = new string[] { "Display Name", refDesc.DisplayName.ToString() };
+            string[] row7 = new string[] { "Node Class", refDesc.NodeClass.ToString() };
+            string[] row8 = new string[] { "Description", "null" };
+            try { row8 = new string[] { "Description", node.Description.ToString() }; }
+            catch { row8 = new string[] { "Description", "null" }; }             
+            string[] row9 = new string[] { "Type Definition", refDesc.TypeDefinition.ToString() };
+            string[] row10 = new string[] { "Write Mask", node.WriteMask.ToString() };
+            string[] row11 = new string[] { "User Write Mask", node.UserWriteMask.ToString() };
+            if (node.NodeClass == NodeClass.Variable)
+            {
+                variableNode = (VariableNode)node.DataLock;
+                Int32 intVar = 0;
+                Int32.TryParse(variableNode.DataType.Identifier.ToString(), out intVar);
+                 
+                string[] row12 = new string[] { "Data Type", DataTypes.GetBrowseName(intVar) };
+                string[] row13 = new string[] { "Value Rank", variableNode.ValueRank.ToString() };
+                string[] row14 = new string[] { "Array Dimensions", variableNode.ArrayDimensions.Capacity.ToString() };
+                string[] row15 = new string[] { "Access Level", variableNode.AccessLevel.ToString() };
+                string[] row16 = new string[] { "Minimum Sampling Interval", variableNode.MinimumSamplingInterval.ToString() };
+                string[] row17 = new string[] { "Historizing", variableNode.Historizing.ToString() };
+ 
+                object[] rows = new object[] { row1, row2, row3, row4, row5, row6, row7, row8, row9, row10, row11, row12, row13, row14, row15, row16, row17 };
+                foreach (string[] rowArray in rows)
+                {
+                    descriptionGridView.Rows.Add(rowArray);
+                }
+            }
+            else
+            {
+                object[] rows = new object[] { row1, row2, row3, row4, row5, row6, row7, row8, row9, row10, row11 };
+                foreach (string[] rowArray in rows)
+                {
+                    descriptionGridView.Rows.Add(rowArray);
+                }
+            }
+ 
+        }
+        private void ClientForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            try
+            {
+                myClientHelperAPI.Disconnect();
+            }
+            catch
+            {
+                ;
+            }
+        }
+        private void NodeTreeView_BeforeExpand(object sender, TreeViewCancelEventArgs e)
+        {
+            e.Node.Nodes.Clear();
+ 
+            ReferenceDescriptionCollection referenceDescriptionCollection;
+            ReferenceDescription refDesc = (ReferenceDescription)e.Node.Tag;
+ 
+            referenceDescriptionCollection = myClientHelperAPI.BrowseNode(refDesc);
+            foreach (ReferenceDescription tempRefDesc in referenceDescriptionCollection)
+            {
+                e.Node.Nodes.Add(tempRefDesc.DisplayName.ToString()).Tag = tempRefDesc;
+            }
+            foreach (TreeNode node in e.Node.Nodes)
+            {
+                node.Nodes.Add("");
+            }
+        }
+        private void BrowsePage_Enter(object sender, EventArgs e)
+        {
+            descriptionGridView.Rows.Clear();
+            nodeTreeView.Nodes.Clear();
+            ReferenceDescriptionCollection referenceDescriptionCollection;
+            try
+            {
+                referenceDescriptionCollection = myClientHelperAPI.BrowseRoot();
+                foreach (ReferenceDescription refDesc in referenceDescriptionCollection)
+                {
+                    nodeTreeView.Nodes.Add(refDesc.DisplayName.ToString()).Tag = refDesc;
+                    foreach (TreeNode node in nodeTreeView.Nodes)
+                    {
+                        node.Nodes.Add("");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error");
+            }
+ 
+ 
+        }
+        private void ReadValButton_Click(object sender, EventArgs e)
+        {
+            List<String> nodeIdStrings = new List<String>();
+            List<String> values = new List<String>();
+            nodeIdStrings.Add(readIdTextBox.Text);
+            try
+            {
+                values = myClientHelperAPI.ReadValues(nodeIdStrings);
+                readTextBox.Text = values.ElementAt<String>(0);
+            }
+            catch (Exception ex)
+            {                                             
+                MessageBox.Show(ex.Message, "Error");                
+            }
+             
+        }
+        private void EndpointListView_ItemSelectionChanged(object sender, ListViewItemSelectionChangedEventArgs e)
+        {
+            mySelectedEndpoint = (EndpointDescription)e.Item.Tag;
+        }
+        private void OpcTabControl_Selecting(object sender, TabControlCancelEventArgs e)
+        {
+            e.Cancel = !e.TabPage.Enabled;
+            if (!e.TabPage.Enabled)
+            {
+                MessageBox.Show("Establish a connection to a server first.", "Error");
+            }
+        }
+        private void SecurityCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            mySecurity = securityCheckBox.Checked;
+        }
+        private void RegisterButton_Click(object sender, EventArgs e)
+        {
+            List<String> nodeIdStrings = new List<String>();
+            nodeIdStrings.Add(rgNodeIdTextBox.Text);
+            try
+            {                
+                myRegisteredNodeIdStrings = myClientHelperAPI.RegisterNodeIds(nodeIdStrings);
+                regNodeIdTextBox.Text = myRegisteredNodeIdStrings.ElementAt<String>(0);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error"); 
+            }
+             
+        }
+        private void UnregisterButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                myClientHelperAPI.UnregisterNodeIds(myRegisteredNodeIdStrings);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error");
+            }
+            myRegisteredNodeIdStrings.Clear();
+            regNodeIdTextBox.Text = "";
+            rgReadTextBox.Text = "";
+            rgWriteTextBox.Text = "";
+        }
+        private void RgReadButton_Click(object sender, EventArgs e)
+        {
+            List<String> values = new List<String>();
+            try
+            {
+                values = myClientHelperAPI.ReadValues(myRegisteredNodeIdStrings);
+                rgReadTextBox.Text = values.ElementAt<String>(0);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error");
+            }
+        }
+        private void RgWriteButton_Click(object sender, EventArgs e)
+        {
+            List<String> values = new List<string>();
+            values.Add(rgWriteTextBox.Text);
+            try
+            {
+                myClientHelperAPI.WriteValues(values, myRegisteredNodeIdStrings);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error");
+            }            
+        }
+        #endregion
+ 
+        /// <summary>
+        /// Event handlers
+        /// </summary>
+        #region EventHandlers
+        private void Notification_MonitoredItem(MonitoredItem monitoredItem, MonitoredItemNotificationEventArgs e)
+        {
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new MonitoredItemNotificationEventHandler(Notification_MonitoredItem), monitoredItem, e);
+                return;
+            }
+            MonitoredItemNotification notification = e.NotificationValue as MonitoredItemNotification;
+            if (notification == null)
+            {
+                return;
+            }
+            subscriptionLabel.Text = "Value: "   Utils.Format("{0}", notification.Value.WrappedValue.ToString())  
+              ";\nStatus Code: "   Utils.Format("{0}", notification.Value.StatusCode.ToString())  
+              ";\nSource timestamp: "   notification.Value.SourceTimestamp.ToString()  
+              "\nServer timestamp: "   notification.Value.ServerTimestamp.ToString();
+        }
+        private void Notification_KeepAlive(Session sender, KeepAliveEventArgs e)
+        {
+            //Handle KeepAlive here
+            ;
+        }
+        #endregion
+    }
+}

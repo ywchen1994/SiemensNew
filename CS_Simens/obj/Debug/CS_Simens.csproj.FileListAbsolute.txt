@@ -1,0 +1,13 @@
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\bin\Debug\CS_Simens.exe.config
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\bin\Debug\CS_Simens.exe
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\bin\Debug\CS_Simens.pdb
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\bin\Debug\Opc.Ua.Client.dll
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\bin\Debug\Opc.Ua.Core.dll
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\obj\Debug\CS_Simens.csprojAssemblyReference.cache
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\obj\Debug\CS_Simens.Form1.resources
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\obj\Debug\CS_Simens.Properties.Resources.resources
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\obj\Debug\CS_Simens.csproj.GenerateResource.cache
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\obj\Debug\CS_Simens.csproj.CoreCompileInputs.cache
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\obj\Debug\CS_Simens.csproj.CopyComplete
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\obj\Debug\CS_Simens.exe
+C:\Users\ywChen\Desktop\CS_SiemensOPC-master\CS_Simens\obj\Debug\CS_Simens.pdb
